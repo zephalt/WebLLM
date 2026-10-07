@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebLLM Chat</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#6b6b6b; --card:#f3f3f1; --me:#2b5fd9; --line:#ddd; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --muted:#999; --card:#242424; --me:#3d6fe0; --line:#333; } }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,sans-serif; display:flex; flex-direction:column; max-width:760px; margin:0 auto; padding:12px; }
+  header { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  select,button,textarea { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  button { cursor:pointer; } button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--me); color:#fff; border-color:var(--me); }
+  #status { color:var(--muted); font-size:13px; margin:8px 0; min-height:20px; }
+  #bar { height:4px; background:var(--card); border-radius:2px; overflow:hidden; display:none; }
+  #bar div { height:100%; width:0; background:var(--me); transition:width .2s; }
+  #chat { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:8px 0; }
+  .msg { padding:10px 14px; border-radius:12px; max-width:85%; white-space:pre-wrap; word-wrap:break-word; background:var(--card); }
+  .msg.user { align-self:flex-end; background:var(--me); color:#fff; }
+  form { display:flex; gap:8px; }
+  textarea { flex:1; resize:none; height:46px; }
+</style>
+</head>
+<body>
+<header>
+  <select id="model" style="max-width:100%">
+    <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2-360M-Instruct-q4f16_1 (~0.4 GB)</option>
+    <option value="Qwen2.5-0.5B-Instruct-q4f16_1-MLC">Qwen2.5-0.5B-Instruct-q4f16_1 (~0.5 GB)</option>
+    <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">Llama-3.2-1B-Instruct-q4f16_1 (~0.9 GB)</option>
+    <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC">Llama-3.2-3B-Instruct-q4f16_1 (~2.3 GB)</option>
+  </select>
+  <button id="load" class="primary">Load model</button>
+  <button id="clear">Clear chat</button>
+</header>
+<div id="status">Pick a model and click Load. It downloads once, then is cached.</div>
+<div id="bar"><div></div></div>
+<div id="chat"></div>
+<form id="form">
+  <textarea id="input" placeholder="Load a model first..." disabled></textarea>
+  <button id="send" class="primary" disabled>Send</button>
+</form>
+
+<script type="module">
+
+const $ = id => document.getElementById(id);
+const chat = $("chat"), input = $("input"), send = $("send"), status = $("status");
+const bar = $("bar"), barFill = bar.firstElementChild;
+let engine = null, busy = false;
+let history = [{ role: "system", content: "You are a helpful, concise assistant." }];
+
+
+let CreateMLCEngine, prebuiltAppConfig;
+for (const url of ["https://esm.run/@mlc-ai/web-llm", "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm"]) {
+  try { ({ CreateMLCEngine, prebuiltAppConfig } = await import(url)); break; }
+  catch (e) { console.error("Library load failed:", url, e); }
+}
+if (!CreateMLCEngine) {
+  status.textContent = "Couldn't load the WebLLM library (offline, or esm.run / jsdelivr is blocked by an extension or network).";
+  $("load").disabled = true;
+}
+
+function addMsg(role, text) {
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+// Fill the dropdown with every prebuilt text model, smallest first.
+// Models ending in q4f32_1 avoid the shader-f16 feature, so try those if
+// a q4f16_1 model errors on your device.
+const models = (prebuiltAppConfig ? prebuiltAppConfig.model_list : [])
+  .filter(m => m.model_type !== 1) // 1 = embedding models, which can't chat
+  .sort((a, b) => (a.vram_required_MB || 0) - (b.vram_required_MB || 0));
+if (models.length) $("model").innerHTML = "";
+for (const m of models) {
+  const o = document.createElement("option");
+  o.value = m.model_id;
+  const tag = m.model_type === 2 ? " [vision, text chat only here]" : "";
+  o.textContent = `${m.model_id.replace("-MLC", "")} (~${((m.vram_required_MB || 0) / 1024).toFixed(1)} GB)${tag}`;
+  $("model").appendChild(o);
+}
+if (models.length) $("model").value = "SmolLM2-360M-Instruct-q4f16_1-MLC";
+
+if (CreateMLCEngine && !navigator.gpu) {
+  status.textContent = "WebGPU isn't available in this browser. Try recent Chrome or Edge.";
+  $("load").disabled = true;
+}
+
+$("load").onclick = async () => {
+  $("load").disabled = true; $("model").disabled = true;
+  bar.style.display = "block";
+  try {
+    engine = await CreateMLCEngine($("model").value, {
+      appConfig: { ...prebuiltAppConfig, useIndexedDBCache: true },
+      initProgressCallback: p => {
+        status.textContent = p.text;
+        barFill.style.width = Math.round((p.progress || 0) * 100) + "%";
+      }
+    });
+    status.textContent = "Ready. Everything runs on your device.";
+    input.disabled = false; send.disabled = false;
+    input.placeholder = "Type a message (Enter to send)";
+    input.focus();
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Failed to load: " + (e.message || e.name || String(e));
+    $("load").disabled = false; $("model").disabled = false;
+  }
+  bar.style.display = "none";
+};
+
+async function ask() {
+  const text = input.value.trim();
+  if (!text || !engine || busy) return;
+  busy = true; send.disabled = true; input.value = "";
+  addMsg("user", text);
+  history.push({ role: "user", content: text });
+  const out = addMsg("assistant", "…");
+  let reply = "";
+  try {
+    const stream = await engine.chat.completions.create({ messages: history, stream: true });
+    for await (const chunk of stream) {
+      reply += chunk.choices[0]?.delta?.content || "";
+      out.textContent = reply;
+      chat.scrollTop = chat.scrollHeight;
+    }
+    history.push({ role: "assistant", content: reply });
+  } catch (e) {
+    out.textContent = "Error: " + e.message;
+  }
+  busy = false; send.disabled = false; input.focus();
+}
+
+$("form").onsubmit = e => { e.preventDefault(); ask(); };
+input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } };
+$("clear").onclick = async () => {
+  chat.innerHTML = "";
+  history = history.slice(0, 1);
+  if (engine) await engine.resetChat();
+};
+</script>
+</body>
+</html>
