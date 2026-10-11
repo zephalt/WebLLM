@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="hide-ai">
+
+<header id="top" class="panel">
+  <button id="btnFiles" class="icon" title="Show or hide files" aria-label="Show or hide files">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+  </button>
+  <div class="brand" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></svg>
+  </div>
+  <span class="title">Code Editor</span>
+  <span class="spacer"></span>
+  <button id="btnRun" class="primary" title="Run (Ctrl+Enter)">
+    <svg viewBox="0 0 24 24" class="fill"><path d="M8 5.5v13l11-6.5z"/></svg>Run
+  </button>
+  <button id="btnSave" class="icon" title="Download this file (Ctrl+S)" aria-label="Download this file">
+    <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg>
+  </button>
+  <button id="btnOpen" class="icon" title="Open files from your computer" aria-label="Open files from your computer">
+    <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+  </button>
+  <span class="divider"></span>
+  <button id="fontDown" class="icon txt" title="Smaller text" aria-label="Smaller text">A−</button>
+  <button id="fontUp" class="icon txt" title="Larger text" aria-label="Larger text">A+</button>
+  <button id="btnTheme" class="icon" title="Switch light or dark theme" aria-label="Switch light or dark theme">
+    <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></svg>
+  </button>
+  <button id="btnAI" class="soft" title="Show or hide the assistant (Ctrl+K)">
+    <svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>Assistant
+  </button>
+  <input id="openInput" type="file" multiple hidden>
+</header>
+
+<aside id="files" class="panel">
+  <div class="side-h">
+    <span>Files</span>
+    <button id="btnNew" class="icon" title="New file" aria-label="New file">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+  <ul id="fileList"></ul>
+</aside>
+
+<main id="center" class="panel">
+  <div id="tabs" role="tablist" aria-label="Open files"></div>
+  <div id="editor"></div>
+  <section id="preview" aria-label="Preview">
+    <div class="pv-h">
+      <span>Preview</span>
+      <span class="spacer"></span>
+      <button id="clearConsole" class="text">Clear console</button>
+      <button id="closePreview" class="text">Close</button>
+    </div>
+    <iframe id="frame" sandbox="allow-scripts allow-modals allow-forms allow-popups" title="Preview output"></iframe>
+    <div id="console" aria-live="polite"></div>
+  </section>
+  <footer id="statusbar">
+    <span id="sbPos">Ln 1, Col 1</span>
+    <span class="spacer"></span>
+    <button id="sbWrap" class="sb" title="Toggle line wrapping">Wrap: off</button>
+    <span class="sb static">Spaces: 2</span>
+    <span id="sbLang" class="sb static">Plain text</span>
+    <button id="sbAI" class="sb ai" title="Show or hide the assistant (Ctrl+K)">AI: off</button>
+  </footer>
+</main>
+
+<aside id="ai" class="panel">
+  <div class="side-h"><span>Assistant</span></div>
+
+  <div class="ai-setup">
+    <div class="seg" role="tablist">
+      <button id="tabLocal" class="on" role="tab">In this browser</button>
+      <button id="tabCloud" role="tab">Cloud API</button>
+    </div>
+
+    <div id="localBox">
+      <label for="modelSel">Model</label>
+      <select id="modelSel"><option>Loading model list…</option></select>
+      <button id="btnLoad" class="primary wide">Download and load</button>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+
+    <div id="cloudBox" hidden>
+      <label for="preset">Provider</label>
+      <select id="preset">
+        <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+        <option value="https://api.groq.com/openai/v1">Groq</option>
+        <option value="http://localhost:11434/v1">Ollama (this machine)</option>
+        <option value="">Custom</option>
+      </select>
+      <label for="cBase">Endpoint</label>
+      <input id="cBase" type="url" placeholder="https://…/v1" spellcheck="false">
+      <label for="cKey">API key</label>
+      <input id="cKey" type="password" placeholder="Stored only in this browser" autocomplete="off">
+      <label for="cModel">Model name</label>
+      <input id="cModel" type="text" placeholder="e.g. a coding model from the provider's list" spellcheck="false">
+    </div>
+
+    <p id="status" class="status">Starting…</p>
+  </div>
+
+  <div id="log" aria-live="polite">
+    <p class="empty">Load a model, then ask about the file you have open. Select code first to limit the question to it.</p>
+  </div>
+
+  <div class="ai-compose">
+    <div class="quick">
+      <button data-q="explain">Explain</button>
+      <button data-q="fix">Fix bugs</button>
+      <button data-q="refactor">Refactor</button>
+      <button data-q="comment">Comment</button>
+      <button data-q="tests">Write tests</button>
+    </div>
+    <div class="composer">
+      <textarea id="prompt" rows="2" placeholder="Ask about your code…"></textarea>
+      <div class="row">
+        <label class="chk"><input id="useCtx" type="checkbox" checked> Include open file or selection</label>
+        <span class="spacer"></span>
+        <button id="btnClearChat" class="text">Clear</button>
+        <button id="btnSend" class="send" title="Send (Enter)" aria-label="Send">
+          <svg viewBox="0 0 24 24"><path d="M12 19V5m0 0l-6 6m6-6l6 6"/></svg>
+        </button>
+        <button id="btnStop" class="send stop" title="Stop" aria-label="Stop" hidden>
+          <svg viewBox="0 0 24 24" class="fill"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/jump-to-line.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/xml-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/indent-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/html-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/css-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/xml-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
+<script src="app.js"></script>
+<script src="ai.js"></script>
+</body>
+</html>
