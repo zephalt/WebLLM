@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="chat-page">
+
+<header class="chat-top">
+  <a class="nav-link" href="index.html">← Code editor</a>
+  <h1>Chat</h1>
+  <span class="spacer"></span>
+  <select id="modelSel" aria-label="Model"><option>Loading model list…</option></select>
+  <button id="btnLoad" class="primary">Download and load</button>
+  <button id="btnClear">Clear</button>
+  <div class="chat-bar" style="flex-basis:100%"><i id="bar"></i></div>
+</header>
+
+<p id="status" class="chat-status">Starting…</p>
+
+<main id="log" class="chat-log" aria-live="polite">
+  <p class="chat-empty">Load a model, then ask anything.</p>
+</main>
+
+<div id="tray" class="chat-tray" hidden></div>
+<form class="chat-compose" id="composer" onsubmit="return false">
+  <button id="btnAttach" type="button" class="icon" title="Attach image or text file" aria-label="Attach">＋</button>
+  <button id="btnShot" type="button" class="icon" title="Share screen" aria-label="Share screen">🖥</button>
+  <input id="fileIn" type="file" multiple hidden accept="image/*,application/pdf,.pdf,.txt,.md,.json,.csv,.js,.ts,.jsx,.tsx,.html,.css,.py,.xml,.yaml,.yml,.log,.sh,.c,.cpp,.java,.go,.rs">
+  <textarea id="prompt" rows="2" placeholder="Message…" aria-label="Message"></textarea>
+  <button id="btnSend" type="button" disabled>Send</button>
+  <button id="btnStop" type="button" class="stop" hidden>Stop</button>
+</form>
+
+<script src="chat.js"></script>
+</body>
+</html>
